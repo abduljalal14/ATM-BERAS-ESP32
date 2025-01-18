@@ -224,6 +224,8 @@ void loop()
         input_berat += key; // Tambahkan angka ke input
         lcd.setCursor(0, 1);
         lcd.print(input_berat + " gram     ");
+        Serial.print("Input Beras: ");
+        Serial.println(input_berat);
       }
     }
   }
@@ -236,10 +238,8 @@ void loop()
   String payload = "{\"id_kartu\":\"" + kode_kartu + "\"}";
   String response = requestToServer("/checkCard", payload);
 
-  Serial.print("Response: ");
-  Serial.println(response);
-
   // Parsing JSON response ke array doc
+  Serial.print("Parsing JSON to Array...");
   DeserializationError error = deserializeJson(doc, response);
 
   // Periksa apakah parsing berhasil
@@ -249,7 +249,6 @@ void loop()
     Serial.println(error.c_str());
     return;
   }
-
   // Ambil data dari doc
   bool success = doc["success"];
   // const char* message = doc["message"];
@@ -258,6 +257,7 @@ void loop()
   {
     lcd.clear();
     lcd.setCursor(0, 0);
+    Serial.println("Kartu belum terdaftar");
     lcd.print("Belum Terdaftar");
     lcd.setCursor(0, 1);
     lcd.print(kode_kartu);
@@ -266,9 +266,14 @@ void loop()
   }
 
   float saldo_beras = doc["saldo_beras"];
+  Serial.print("Saldo Beras: ");
+  Serial.println(saldo_beras);
+  Serial.print("Input Beras: ");
+  Serial.println(input_berat);
 
   if (saldo_beras < input_berat.toFloat())
   {
+    Serial.println("Saldo Kurang");
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Saldo Kurang");
@@ -281,19 +286,23 @@ void loop()
   // Step 4: Deteksi wadah
   lcd.clear();
   lcd.setCursor(0, 0);
+  Serial.println("Cek Wadah...");
   lcd.print("Cek Wadah...");
   if (digitalRead(SENSOR_PIN) == LOW)
   {
     lcd.setCursor(0, 1);
+    Serial.println("Wadah belum ada");
     lcd.print("Wadah belum ada");
     delay(3000);
     return;
   }
 
   // Step 5: Dispenser beras
+  Serial.println("Membuka Servo");
   bukaServo();
   lcd.clear();
   lcd.setCursor(0, 0);
+  Serial.println("Beras Keluar....");
   lcd.print("Beras Keluar...");
   while (true)
   {
