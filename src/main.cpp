@@ -9,11 +9,15 @@
 #include <EEPROM.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <ArduinoJson.h>
 
 // Konfigurasi WiFi
 const char *ssid = "MEDIA MASJID";
 const char *password = "31630726";
+// Server REST API
 const char *server_url = "https://yellowgreen-mule-372794.hostingersite.com/api";
+// JSON Document
+StaticJsonDocument<200> doc;
 
 // Konfigurasi Pin
 #define SERVO_PIN 15
@@ -91,7 +95,7 @@ String requestToServer(String endpoint, String payload)
     Serial.println("Menghubungkan ke Server...");
     Serial.println(server_url + endpoint);
     Serial.println(payload);
-    
+
     int httpResponseCode = http.POST(payload);
 
     if (httpResponseCode > 0)
@@ -234,7 +238,23 @@ void loop()
 
   Serial.print("Response: ");
   Serial.println(response);
-  if (response == "kartu_tidak_terdaftar")
+
+  // Parsing JSON response ke array doc
+  DeserializationError error = deserializeJson(doc, response);
+
+  // Periksa apakah parsing berhasil
+  if (error)
+  {
+    Serial.print("Error parsing JSON: ");
+    Serial.println(error.c_str());
+    return;
+  }
+
+  // Ambil data dari doc
+  bool success = doc["success"];
+  // const char* message = doc["message"];
+
+  if (!success)
   {
     lcd.clear();
     lcd.setCursor(0, 0);
@@ -245,7 +265,7 @@ void loop()
     return;
   }
 
-  float saldo_beras = response.toFloat(); // Dummy parsing, sesuaikan dengan format JSON
+  float saldo_beras = doc["saldo_beras"];
 
   if (saldo_beras < input_berat.toFloat())
   {
