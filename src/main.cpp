@@ -54,13 +54,14 @@ Servo servo;
 // Variabel Global
 long saved_tare = 0;
 float berat_dibaca = 0;
-String input_berat = "0";
+String input_berat = "";
 
 void connectToWiFi()
 {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Connecting...");
+  Serial.println("Menghubungak ke WiFi...");
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED)
   {
@@ -68,8 +69,9 @@ void connectToWiFi()
     Serial.print(".");
     lcd.setCursor(0, 1);
     lcd.print("Retrying...");
+    Serial.println("Menghubungak ulang ke WiFi...");
   }
-  Serial.println("WiFi connected");
+  Serial.println("WiFi terhubung");
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("WiFi Connected");
@@ -86,6 +88,10 @@ String requestToServer(String endpoint, String payload)
     http.begin(server_url + endpoint);
     http.addHeader("Content-Type", "application/json");
 
+    Serial.println("Menghubungkan ke Server...");
+    Serial.println(server_url + endpoint);
+    Serial.println(payload);
+    
     int httpResponseCode = http.POST(payload);
 
     if (httpResponseCode > 0)
@@ -118,16 +124,18 @@ void setup()
 
   // Servo
   servo.attach(SERVO_PIN, 500, 2400);
+  Serial.println("Servo siap");
   servo.write(0); // Tutup dispenser
 
   // RFID
   SPI.begin();
   rfid.PCD_Init();
-  Serial.println("RFID diinisialisasi, menunggu kartu...");
+  Serial.println("RFID siap");
 
   // LCD
   Wire.begin(21, 22);
   lcd.init();
+  Serial.println("LCD Siap");
   lcd.backlight();
   lcd.setCursor(0, 0);
   lcd.print("ATM BERAS READY");
@@ -135,9 +143,12 @@ void setup()
 
   // Loadcell
   scale.begin(DT_PIN, SCK_PIN);
+  Serial.print("mengambil tare tersimpan: ");
   EEPROM.get(0, saved_tare);
+  Serial.println(saved_tare);
   scale.set_offset(saved_tare);
   scale.set_scale(380.f);
+  Serial.println("Loadcell Siap");
 
   // Sensor IR
   pinMode(SENSOR_PIN, INPUT);
@@ -145,6 +156,7 @@ void setup()
 
 void bacaKartu()
 {
+  Serial.println("Mendeteksi Kartu...");
   while (true)
   {
     if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial())
@@ -185,6 +197,7 @@ void loop()
   lcd.setCursor(0, 1);
   lcd.print(input_berat + " gram     ");
 
+  Serial.println("Proses input gram beras...");
   char key = keypad.getKey();
   while (true)
   {
@@ -193,7 +206,7 @@ void loop()
     {
       if (key == '*')
       {
-        input_berat = "0"; // Reset input jika * ditekan
+        input_berat = ""; // Reset input jika * ditekan
         lcd.setCursor(0, 1);
         lcd.print(input_berat + " gram     ");
       }
@@ -219,6 +232,8 @@ void loop()
   String payload = "{\"id_kartu\":\"" + kode_kartu + "\"}";
   String response = requestToServer("/checkCard", payload);
 
+  Serial.print("Response: ");
+  Serial.println(response);
   if (response == "kartu_tidak_terdaftar")
   {
     lcd.clear();
