@@ -18,6 +18,7 @@ const char *password = "31630726";
 const char *server_url = "https://yellowgreen-mule-372794.hostingersite.com/api";
 // JSON Document
 StaticJsonDocument<200> doc;
+StaticJsonDocument<200> doc2;
 
 // Konfigurasi Pin
 #define SERVO_PIN 15
@@ -38,8 +39,11 @@ char keys[ROWS][COLS] = {
     {'4', '5', '6', 'B'},
     {'7', '8', '9', 'C'},
     {'*', '0', '#', 'D'}};
-byte rowPins[ROWS] = {32, 33, 25, 26};
-byte colPins[COLS] = {27, 14, 12, 13};
+// byte rowPins[ROWS] = {32, 33, 25, 26};
+// byte colPins[COLS] = {27, 14, 12, 13};
+
+byte rowPins[ROWS] = {13, 12, 14, 27};
+byte colPins[COLS] = {26, 25, 33, 32};
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 // LCD I2C
@@ -51,12 +55,12 @@ String kode_kartu = "";
 
 // Loadcell HX711
 HX711 scale;
-
+// EEPROM address untuk menyimpan offset tare
+#define EEPROM_ADDRESS 0
 // Servo
 Servo servo;
 
 // Variabel Global
-long saved_tare = 0;
 float berat_dibaca = 0;
 String input_berat = "";
 
@@ -91,8 +95,18 @@ String requestToServer(String endpoint, String payload)
     HTTPClient http;
     http.begin(server_url + endpoint);
     http.addHeader("Content-Type", "application/json");
+    http.addHeader("Accept-Encoding", "identity");
+    http.addHeader("User-Agent", "PostmanRuntime/7.43.0");
+    http.addHeader("Authorization", "Bearer buatkode");
+
+    http.setTimeout(15000);
 
     Serial.println("Menghubungkan ke Server...");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Menghubungkan");
+    lcd.setCursor(0, 1);
+    lcd.print("ke Server...");
     Serial.println(server_url + endpoint);
     Serial.println(payload);
 
@@ -100,9 +114,12 @@ String requestToServer(String endpoint, String payload)
 
     if (httpResponseCode > 0)
     {
+      String remaining = http.header("x-ratelimit-remaining");
+      Serial.println("Sisa kuota: " + remaining);
       String response = http.getString();
       Serial.println("Response: " + response);
       http.end();
+     
       return response;
     }
     else
@@ -121,6 +138,7 @@ String requestToServer(String endpoint, String payload)
 
 void setup()
 {
+  Serial.println("MEMULAI SETUP...");
   Serial.begin(115200);
 
   // WiFi
@@ -129,7 +147,7 @@ void setup()
   // Servo
   servo.attach(SERVO_PIN, 500, 2400);
   Serial.println("Servo siap");
-  servo.write(0); // Tutup dispenser
+  servo.write(90); // Tutup dispenser
 
   // RFID
   SPI.begin();
@@ -147,13 +165,32 @@ void setup()
 
   // Loadcell
   scale.begin(DT_PIN, SCK_PIN);
-  Serial.print("mengambil tare tersimpan: ");
-  EEPROM.get(0, saved_tare);
-  Serial.println(saved_tare);
-  scale.set_offset(saved_tare);
-  scale.set_scale(380.f);
-  Serial.println("Loadcell Siap");
+  // Tunggu beberapa saat agar HX711 stabil
+  Serial.println("Tunggu HX711 stabilisasi...");
+  delay(2000);
+  // Kalibrasi awal
+  if (scale.is_ready())
+  {
+    Serial.println("HX711 siap digunakan.");
+  }
+  else
+  {
+    Serial.println("HX711 tidak terhubung. Periksa koneksi.");
+    while (true)
+      ;
+  }
 
+  // Inisialisasi EEPROM
+  EEPROM.begin(512);
+  Serial.println("EEPROM inisialisasi selesai.");
+
+  // Muat tare dari EEPROM
+  long saved_tare = 0;
+  EEPROM.get(EEPROM_ADDRESS, saved_tare);
+  Serial.println("Memuat EEPROM Saved Tare: "+String(saved_tare));
+
+  scale.set_offset(saved_tare);
+  scale.set_scale(340.69f);
   // Sensor IR
   pinMode(SENSOR_PIN, INPUT);
 }
@@ -174,6 +211,7 @@ void bacaKartu()
       rfid.PICC_HaltA();
       break;
     }
+    lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Silakan Tap");
     lcd.setCursor(0, 1);
@@ -184,13 +222,94 @@ void bacaKartu()
 
 void bukaServo()
 {
-  servo.write(90); // Buka dispenser
+  servo.write(0); // Buka dispenser
 }
 
 void tutupServo()
 {
-  servo.write(0); // Tutup dispenser
+  servo.write(90); // Tutup dispenser
 }
+
+void cekSaldo()
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Cek Saldo Kartu");
+  Serial.println("Cek Saldo Kartu...");
+
+  // Baca kartu
+  bacaKartu();
+
+  // Kirim permintaan ke server
+  String payload = "{\"card_code\":\"" + kode_kartu + "\"}";
+  String response = requestToServer("/checkCard", payload);
+
+  // Parsing JSON response
+  DeserializationError error = deserializeJson(doc, response);
+  if (error)
+  {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Cek saldo gagal");
+    lcd.setCursor(0, 1);
+    lcd.print("Coba lagi nanti");
+    Serial.println("Error parsing JSON: " + String(error.c_str()));
+    delay(2000);
+    return;
+  }
+
+  // Ambil saldo beras dari respons
+  bool success = doc["success"];
+  if (!success)
+  {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Belum Terdaftar");
+    lcd.setCursor(0, 1);
+    lcd.print(kode_kartu);
+    delay(3000);
+    return;
+  }
+
+  String name = doc["name"];
+  float saldo_beras = doc["saldo_beras"];
+  int saldo_kg = (int)saldo_beras/1000;
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(name);
+  lcd.setCursor(0, 1);
+  lcd.print("Saldo: "+String(saldo_beras/1000) + " KG");
+  Serial.println("Saldo Beras: " + String(saldo_beras));
+  delay(3000);
+}
+
+void resetTare()
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Tare Loadcell...");
+  Serial.println("Melakukan tare loadcell...");
+  scale.tare(); // Tare loadcell
+  // Simpan tare ke EEPROM
+  long tare_offset = scale.get_offset();
+  EEPROM.put(EEPROM_ADDRESS, tare_offset);
+  EEPROM.commit();
+  float coba = 0;
+  EEPROM.get(EEPROM_ADDRESS,coba);
+  Serial.println("Skala dari EEPROM: "+ String(coba));
+
+  Serial.print("Tare disimpan: ");
+  Serial.println(tare_offset);
+
+  lcd.setCursor(0, 1);
+  lcd.print("Tare Selesai");
+  Serial.println("Tare selesai, offset: " + String(tare_offset));
+  delay(2000);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Masukan Jumlah:");
+}
+
 
 void loop()
 {
@@ -203,12 +322,31 @@ void loop()
 
   Serial.println("Proses input gram beras...");
   char key = keypad.getKey();
+
   while (true)
   {
     key = keypad.getKey();
     if (key)
     {
-      if (key == '*')
+      if (key == 'A')
+      {
+        input_berat = ""; // Reset input berat
+        return;           // Kembali ke awal loop
+      }
+
+      // Cek saldo jika tombol "C" ditekan
+      else if (key == 'C')
+      {
+        cekSaldo();
+        return;
+      }
+
+      else if (key == 'D')
+      {
+        resetTare();
+      }
+
+      else if (key == '*')
       {
         input_berat = ""; // Reset input jika * ditekan
         lcd.setCursor(0, 1);
@@ -235,7 +373,7 @@ void loop()
   Serial.println("Kartu: " + kode_kartu);
 
   // Step 3: Request ke server
-  String payload = "{\"id_kartu\":\"" + kode_kartu + "\"}";
+  String payload = "{\"card_code\":\"" + kode_kartu + "\"}";
   String response = requestToServer("/checkCard", payload);
 
   // Parsing JSON response ke array doc
@@ -245,8 +383,14 @@ void loop()
   // Periksa apakah parsing berhasil
   if (error)
   {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Gagal Koneksi");
+    lcd.setCursor(0, 1);
+    lcd.print("Sil. Coba Lagi");
     Serial.print("Error parsing JSON: ");
     Serial.println(error.c_str());
+    delay(3000);
     return;
   }
   // Ambil data dari doc
@@ -288,7 +432,7 @@ void loop()
   lcd.setCursor(0, 0);
   Serial.println("Cek Wadah...");
   lcd.print("Cek Wadah...");
-  if (digitalRead(SENSOR_PIN) == LOW)
+  if (digitalRead(SENSOR_PIN) == HIGH)
   {
     lcd.setCursor(0, 1);
     Serial.println("Wadah belum ada");
@@ -307,8 +451,9 @@ void loop()
   while (true)
   {
     berat_dibaca = scale.get_units();
+    Serial.println(berat_dibaca);
     lcd.setCursor(0, 1);
-    lcd.print(String(berat_dibaca) + " gram   ");
+    lcd.print(String((int)berat_dibaca) + " gram   ");
     if (berat_dibaca >= input_berat.toFloat())
     {
       tutupServo();
@@ -317,8 +462,10 @@ void loop()
   }
 
   // Step 6: Konfirmasi ke server
-  payload = "{\"id_kartu\":\"" + kode_kartu + "\",\"berat\":\"" + input_berat + "\"}";
-  requestToServer("/deductBalance", payload);
+  payload = "{\"card_code\":\"" + kode_kartu + "\",\"berat\":\"" + input_berat + "\"}";
+  String response2 = requestToServer("/deductBalance", payload);
+
+  // Parsing JSON response
 
   // Step 7: Konfirmasi
   lcd.clear();
@@ -327,4 +474,34 @@ void loop()
   lcd.setCursor(0, 1);
   lcd.print(input_berat + " gram     ");
   delay(3000);
+  // Step 8: Cek Sisa Saldo
+  DeserializationError error2 = deserializeJson(doc2, response2);
+  if (error)
+  {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Cek saldo gagal");
+    lcd.setCursor(0, 1);
+    lcd.print("Coba lagi nanti");
+    Serial.println("Error parsing JSON: " + String(error.c_str()));
+    delay(2000);
+    return;
+  }
+
+  String name = doc["name"];
+  float sisa_saldo = doc2["saldo"];
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(name);
+  lcd.setCursor(0, 1);
+  lcd.print("Sisa: "+String(sisa_saldo/1000) + " KG");
+  Serial.println("Sisa: " + String(sisa_saldo));
+  delay(3000);
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Semoga Manfaat");
+  delay(3000);
+  
+  input_berat = "";
 }
