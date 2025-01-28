@@ -10,12 +10,52 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <WiFiClientSecure.h>
 
 // Konfigurasi WiFi
 const char *ssid = "MEDIA MASJID";
 const char *password = "31630726";
 // Server REST API
 const char *server_url = "https://yellowgreen-mule-372794.hostingersite.com/api";
+const char* root_ca = \
+"-----BEGIN CERTIFICATE-----\n"
+"MIIF3jCCA8agAwIBAgIQAf1tMPyjylGoG7xkDjUDLTANBgkqhkiG9w0BAQwFADCB\n"
+"iDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0pl\n"
+"cnNleSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNV\n"
+"BAMTJVVTRVJUcnVzdCBSU0EgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMTAw\n"
+"MjAxMDAwMDAwWhcNMzgwMTE4MjM1OTU5WjCBiDELMAkGA1UEBhMCVVMxEzARBgNV\n"
+"BAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNleSBDaXR5MR4wHAYDVQQKExVU\n"
+"aGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMTJVVTRVJUcnVzdCBSU0EgQ2Vy\n"
+"dGlmaWNhdGlvbiBBdXRob3JpdHkwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIK\n"
+"AoICAQCAEmUXNg7D2wiz0KxXDXbtzSfTTK1Qg2HiqiBNCS1kCdzOiZ/MPans9s/B\n"
+"3PHTsdZ7NygRK0faOca8Ohm0X6a9fZ2jY0K2dvKpOyuR+OJv0OwWIJAJPuLodMkY\n"
+"tJHUYmTbf6MG8YgYapAiPLz+E/CHFHv25B+O1ORRxhFnRghRy4YUVD+8M/5+bJz/\n"
+"Fp0YvVGONaanZshyZ9shZrHUm3gDwFA66Mzw3LyeTP6vBZY1H1dat//O+T23LLb2\n"
+"VN3I5xI6Ta5MirdcmrS3ID3KfyI0rn47aGYBROcBTkZTmzNg95S+UzeQc0PzMsNT\n"
+"79uq/nROacdrjGCT3sTHDN/hMq7MkztReJVni+49Vv4M0GkPGw/zJSZrM233bkf6\n"
+"c0Plfg6lZrEpfDKEY1WJxA3Bk1QwGROs0303p+tdOmw1XNtB1xLaqUkL39iAigmT\n"
+"Yo61Zs8liM2EuLE/pDkP2QKe6xJMlXzzawWpXhaDzLhn4ugTncxbgtNMs+1b/97l\n"
+"c6wjOy0AvzVVdAlJ2ElYGn+SNuZRkg7zJn0cTRe8yexDJtC/QV9AqURE9JnnV4ee\n"
+"UB9XVKg+/XRjL7FQZQnmWEIuQxpMtPAlR1n6BB6T1CZGSlCBst6+eLf8ZxXhyVeE\n"
+"Hg9j1uliutZfVS7qXMYoCAQlObgOK6nyTJccBz8NUvXt7y+CDwIDAQABo0IwQDAd\n"
+"BgNVHQ4EFgQUU3m/WqorSs9UgOHYm8Cd8rIDZsswDgYDVR0PAQH/BAQDAgEGMA8G\n"
+"A1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEMBQADggIBAFzUfA3P9wF9QZllDHPF\n"
+"Up/L+M+ZBn8b2kMVn54CVVeWFPFSPCeHlCjtHzoBN6J2/FNQwISbxmtOuowhT6KO\n"
+"VWKR82kV2LyI48SqC/3vqOlLVSoGIG1VeCkZ7l8wXEskEVX/JJpuXior7gtNn3/3\n"
+"ATiUFJVDBwn7YKnuHKsSjKCaXqeYalltiz8I+8jRRa8YFWSQEg9zKC7F4iRO/Fjs\n"
+"8PRF/iKz6y+O0tlFYQXBl2+odnKPi4w2r78NBc5xjeambx9spnFixdjQg3IM8WcR\n"
+"iQycE0xyNN+81XHfqnHd4blsjDwSXWXavVcStkNr/+XeTWYRUc+ZruwXtuhxkYze\n"
+"Sf7dNXGiFSeUHM9h4ya7b6NnJSFd5t0dCy5oGzuCr+yDZ4XUmFF0sbmZgIn/f3gZ\n"
+"XHlKYC6SQK5MNyosycdiyA5d9zZbyuAlJQG03RoHnHcAP9Dc1ew91Pq7P8yF1m9/\n"
+"qS3fuQL39ZeatTXaw2ewh0qpKJ4jjv9cJ2vhsE/zB+4ALtRZh8tSQZXq9EfX7mRB\n"
+"VXyNWQKV3WKdwrnuWih0hKWbt5DHDAff9Yk2dDLWKMGwsAvgnEzDHNb842m1R0aB\n"
+"L6KCq9NjRHDEjf8tM7qtj3u1cIiuPhnPQCjY/MiQu12ZIvVS5ljFH4gxQ+6IHdfG\n"
+"jjxDah2nGN59PRbxYvnKkKj9\n"
+"-----END CERTIFICATE-----\n";
+
+WiFiClientSecure client;
+
+
 // JSON Document
 StaticJsonDocument<200> doc;
 StaticJsonDocument<200> doc2;
@@ -56,13 +96,43 @@ String kode_kartu = "";
 // Loadcell HX711
 HX711 scale;
 // EEPROM address untuk menyimpan offset tare
-#define EEPROM_ADDRESS 0
+#define EEPROM_TARE_ADDRESS 0
+#define EEPROM_SCALE_ADDRESS 10
 // Servo
 Servo servo;
 
 // Variabel Global
 float berat_dibaca = 0;
 String input_berat = "";
+
+String getUsedEEPROMAddresses() {
+  String usedAddress = "";
+  int usedAddresses[EEPROM.length()];
+  int count = 0;  // Variabel untuk menghitung jumlah alamat yang terisi
+
+  // Membaca seluruh EEPROM dan memeriksa apakah ada data yang terisi
+  for (int i = 0; i < EEPROM.length(); i++) {
+    int content = (int) EEPROM.read(i);  // Baca nilai di EEPROM
+    if (content != 255) {  // 255 berarti belum ada data yang ditulis
+      usedAddresses[count] = i;  // Menyimpan alamat EEPROM yang terisi
+      count++;  // Increment count untuk menyimpan alamat selanjutnya
+    }
+  }
+  // Membuat string untuk menampilkan alamat-alamat yang terpakai
+  usedAddress += "[";
+
+  // Menggabungkan semua alamat yang terpakai dalam satu string
+  for (int i = 0; i < count; i++) {
+    usedAddress += String(usedAddresses[i]);
+    if (i < count - 1) {
+      usedAddress += ", ";  // Menambahkan koma hanya jika bukan elemen terakhir
+    }
+  }
+  
+  usedAddress += "]";
+
+  return usedAddress;
+}
 
 void connectToWiFi()
 {
@@ -92,8 +162,12 @@ String requestToServer(String endpoint, String payload)
 {
   if (WiFi.status() == WL_CONNECTED)
   {
+
+    client.setCACert(root_ca);
+    // client.setInsecure(); // Abaikan validasi SSL
     HTTPClient http;
-    http.begin(server_url + endpoint);
+    http.begin(client, server_url + endpoint);
+    
     http.addHeader("Content-Type", "application/json");
     http.addHeader("Accept-Encoding", "identity");
     http.addHeader("User-Agent", "PostmanRuntime/7.43.0");
@@ -183,14 +257,22 @@ void setup()
   // Inisialisasi EEPROM
   EEPROM.begin(512);
   Serial.println("EEPROM inisialisasi selesai.");
+    // Mencetak alamat EEPROM yang sudah terpakai
+  String usedAddres =  getUsedEEPROMAddresses();
+  Serial.println("Used EEPROM Address: "+usedAddres);
 
   // Muat tare dari EEPROM
   long saved_tare = 0;
-  EEPROM.get(EEPROM_ADDRESS, saved_tare);
+  EEPROM.get(EEPROM_TARE_ADDRESS, saved_tare);
   Serial.println("Memuat EEPROM Saved Tare: "+String(saved_tare));
 
+    // Memeriksa apakah sudah ada nilai kalibrasi di EEPROM
+  float saved_scale;
+  EEPROM.get(EEPROM_SCALE_ADDRESS, saved_scale);
+  Serial.println("Memuat EEPROM Saved Scale: "+String(saved_scale));
+
   scale.set_offset(saved_tare);
-  scale.set_scale(340.69f);
+  scale.set_scale(saved_scale);
   // Sensor IR
   pinMode(SENSOR_PIN, INPUT);
 }
@@ -292,11 +374,11 @@ void resetTare()
   scale.tare(); // Tare loadcell
   // Simpan tare ke EEPROM
   long tare_offset = scale.get_offset();
-  EEPROM.put(EEPROM_ADDRESS, tare_offset);
+  EEPROM.put(EEPROM_TARE_ADDRESS, tare_offset);
   EEPROM.commit();
-  float coba = 0;
-  EEPROM.get(EEPROM_ADDRESS,coba);
-  Serial.println("Skala dari EEPROM: "+ String(coba));
+  // float coba = 0;
+  // EEPROM.get(EEPROM_TARE_ADDRESS,coba);
+  // Serial.println("Skala dari EEPROM: "+ String(coba));
 
   Serial.print("Tare disimpan: ");
   Serial.println(tare_offset);
@@ -304,6 +386,51 @@ void resetTare()
   lcd.setCursor(0, 1);
   lcd.print("Tare Selesai");
   Serial.println("Tare selesai, offset: " + String(tare_offset));
+  delay(2000);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Masukan Jumlah:");
+}
+void kalibrasiScale()
+{
+  float calibration_factor = 220; // Sesuaikan dengan kebutuhan
+  scale.set_scale(calibration_factor);
+  Serial.println("Kalibrasi Loadcell");
+  Serial.println("Silakan taruh beban di atas loadcell untuk kalibrasi");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Kalibrasi Loadcell...");
+  lcd.setCursor(0, 1);
+  lcd.print("Letakan Beban 220");
+
+  // Tunggu beberapa detik untuk stabilisasi
+  delay(5000);
+
+
+  // Hitung rata-rata nilai pembacaan beban untuk kalibrasi
+  float sum = 0;
+  int count = 50;
+  Serial.print("hitung Rata-rata mulai");
+  for (int i = 0; i < count; i++) {
+    sum += scale.get_units(10); // Ambil rata-rata pembacaan
+    delay(50);
+  }
+  Serial.print("hitung Rata-rata selesai");
+  
+  float averageReading = sum / count;
+  Serial.print("Rata-rata pembacaan: ");
+  Serial.println(averageReading);
+  
+  // Menyimpan factor kalibrasi ke EEPROM (alamat 10)
+  EEPROM.begin(512); // Ukuran EEPROM (512 byte)
+  EEPROM.put(10, averageReading);
+  EEPROM.commit();
+  Serial.print("Faktor kalibrasi disimpan di EEPROM alamat 10: ");
+  Serial.println(averageReading);
+  
+  lcd.setCursor(0, 1);
+  lcd.print("Kalib. Selesai");
+
   delay(2000);
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -328,42 +455,56 @@ void loop()
     key = keypad.getKey();
     if (key)
     {
-      if (key == 'A')
-      {
-        input_berat = ""; // Reset input berat
-        return;           // Kembali ke awal loop
-      }
-
       // Cek saldo jika tombol "C" ditekan
-      else if (key == 'C')
+      if (key == 'C')
       {
         cekSaldo();
         return;
       }
 
-      else if (key == 'D')
-      {
-        resetTare();
-      }
+      // else if (key == 'D')
+      // {
+      //   resetTare();
+      // }
 
       else if (key == '*')
       {
-        input_berat = ""; // Reset input jika * ditekan
-        lcd.setCursor(0, 1);
-        lcd.print(input_berat + " gram     ");
+        input_berat = ""; // Reset input berat
+        return;           // Kembali ke awal loop
       }
       else if (key == '#')
       {
+        if (input_berat== "00001")
+        {
+          resetTare();
+          input_berat = "";
+          lcd.setCursor(0, 1);
+          lcd.print(input_berat + " gram     ");
+        }
+        else if (input_berat== "00002")
+        {
+          kalibrasiScale();
+          input_berat = "";
+          lcd.setCursor(0, 1);
+          lcd.print(input_berat + " gram     ");
+        }
+        else{
         Serial.println("Input selesai.");
         break; // Keluar dari loop jika # ditekan
+        }
       }
       else
       {
-        input_berat += key; // Tambahkan angka ke input
+        if (key != 'A' && key != 'B' && key != 'D')
+        {
+          input_berat += key; // Tambahkan angka ke input
         lcd.setCursor(0, 1);
         lcd.print(input_berat + " gram     ");
         Serial.print("Input Beras: ");
         Serial.println(input_berat);
+        }
+        
+        
       }
     }
   }
@@ -428,18 +569,22 @@ void loop()
   }
 
   // Step 4: Deteksi wadah
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  Serial.println("Cek Wadah...");
-  lcd.print("Cek Wadah...");
-  if (digitalRead(SENSOR_PIN) == HIGH)
-  {
-    lcd.setCursor(0, 1);
-    Serial.println("Wadah belum ada");
-    lcd.print("Wadah belum ada");
-    delay(3000);
-    return;
-  }
+  // lcd.clear();
+  // lcd.setCursor(0, 0);
+  // Serial.println("Cek Wadah...");
+  // lcd.print("Cek Wadah...");
+  // if (digitalRead(SENSOR_PIN) == HIGH)
+  // {
+  //   lcd.setCursor(0, 1);
+  //   Serial.println("Wadah belum ada");
+  //   lcd.print("Wadah belum ada");
+  //   delay(3000);
+  //   return;
+  // }
+
+  // Step 6: Konfirmasi ke server
+  payload = "{\"card_code\":\"" + kode_kartu + "\",\"berat\":\"" + input_berat + "\"}";
+  String response2 = requestToServer("/deductBalance", payload);
 
   // Step 5: Dispenser beras
   Serial.println("Membuka Servo");
@@ -461,9 +606,7 @@ void loop()
     }
   }
 
-  // Step 6: Konfirmasi ke server
-  payload = "{\"card_code\":\"" + kode_kartu + "\",\"berat\":\"" + input_berat + "\"}";
-  String response2 = requestToServer("/deductBalance", payload);
+  
 
   // Parsing JSON response
 
