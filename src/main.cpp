@@ -376,9 +376,6 @@ void resetTare()
   long tare_offset = scale.get_offset();
   EEPROM.put(EEPROM_TARE_ADDRESS, tare_offset);
   EEPROM.commit();
-  // float coba = 0;
-  // EEPROM.get(EEPROM_TARE_ADDRESS,coba);
-  // Serial.println("Skala dari EEPROM: "+ String(coba));
 
   Serial.print("Tare disimpan: ");
   Serial.println(tare_offset);
@@ -393,49 +390,62 @@ void resetTare()
 }
 void kalibrasiScale()
 {
-  float calibration_factor = 220; // Sesuaikan dengan kebutuhan
-  scale.set_scale(calibration_factor);
-  Serial.println("Kalibrasi Loadcell");
-  Serial.println("Silakan taruh beban di atas loadcell untuk kalibrasi");
+  float knownWeight = 220.0; // Berat beban kalibrasi (gram)
+  Serial.println("== Kalibrasi Loadcell ==");
+  Serial.println("Silakan taruh beban di atas loadcell untuk kalibrasi.");
+  
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Kalibrasi Loadcell...");
   lcd.setCursor(0, 1);
-  lcd.print("Letakan Beban 220");
+  lcd.print("Letakan ");
+  lcd.print(knownWeight);
+  lcd.print("g");
 
   // Tunggu beberapa detik untuk stabilisasi
   delay(5000);
 
-
-  // Hitung rata-rata nilai pembacaan beban untuk kalibrasi
-  float sum = 0;
-  int count = 50;
-  Serial.print("hitung Rata-rata mulai");
-  for (int i = 0; i < count; i++) {
-    sum += scale.get_units(10); // Ambil rata-rata pembacaan
-    delay(50);
+  // Baca rata-rata langsung dengan get_units(10)
+  float averageReading = scale.get_units(10); // Membaca 10 kali dan mengambil rata-rata
+  
+  // Validasi pembacaan
+  if (isnan(averageReading)) {
+    Serial.println("Error: Gagal membaca loadcell!");
+    lcd.setCursor(0, 1);
+    lcd.print("Err: Gagal Baca");
+    delay(2000);
+    return;
   }
-  Serial.print("hitung Rata-rata selesai");
-  
-  float averageReading = sum / count;
-  Serial.print("Rata-rata pembacaan: ");
+
+  Serial.print("Nilai terbaca: ");
   Serial.println(averageReading);
-  
-  // Menyimpan factor kalibrasi ke EEPROM (alamat 10)
+
+  // Hitung faktor kalibrasi baru
+  float calibration_factor = knownWeight / averageReading;
+  scale.set_scale(calibration_factor);
+
+  // Simpan faktor kalibrasi ke EEPROM
   EEPROM.begin(512); // Ukuran EEPROM (512 byte)
-  EEPROM.put(10, averageReading);
+  EEPROM.put(EEPROM_SCALE_ADDRESS, calibration_factor); // Alamat EEPROM untuk kalibrasi
   EEPROM.commit();
-  Serial.print("Faktor kalibrasi disimpan di EEPROM alamat 10: ");
-  Serial.println(averageReading);
+
+  Serial.print("Faktor kalibrasi disimpan di EEPROM: ");
+  Serial.println(calibration_factor);
   
+  // Tampilkan pesan selesai di LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Kalibrasi Selesai");
   lcd.setCursor(0, 1);
-  lcd.print("Kalib. Selesai");
+  lcd.print("Faktor: ");
+  lcd.print(calibration_factor, 2); // Tampilkan hingga 2 desimal
 
   delay(2000);
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Masukan Jumlah:");
 }
+
 
 
 void loop()
