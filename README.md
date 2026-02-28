@@ -2,6 +2,8 @@
 
 Proyek firmware ESP32 untuk mesin penyalur beras berbasis kartu RFID, keypad, load cell (HX711), dan servo. Sistem terhubung ke REST API untuk cek kartu dan pemotongan saldo beras.
 
+Buat Backend anda sendiri dengan clone repositori: https://github.com/abduljalal14/atm-beras-laravel
+
 ## Fitur Utama
 - Input berat beras (gram) lewat keypad 4x4.
 - Verifikasi kartu RFID ke server (`/checkCard`).
